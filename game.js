@@ -1474,31 +1474,42 @@ function drawPlayer(p) {
   // === PIERNAS ===
   const legSwing = Math.sin(p.walkTime) * 5;
   const legSwing2 = Math.sin(p.walkTime + Math.PI) * 5;
-  // pantalón corto
-  ctx.fillStyle = '#2d6b4a'; // verde campo
+  // pantalón corto azul marino
+  ctx.fillStyle = '#2a3a5a';
   ctx.fillRect(-10, -14, 8, 14 + (p.onGround ? legSwing*0.5 : 0));
   ctx.fillRect(2, -14, 8, 14 + (p.onGround ? legSwing2*0.5 : 0));
   // piernas (piel)
-  ctx.fillStyle = '#e8b890';
+  ctx.fillStyle = '#f0c8a0';
   ctx.fillRect(-9, -8, 6, 8 + (p.onGround ? legSwing*0.3 : 0));
   ctx.fillRect(3, -8, 6, 8 + (p.onGround ? legSwing2*0.3 : 0));
-  // zapatillas
-  ctx.fillStyle = '#d62828';
-  ctx.fillRect(-12, -3 + (p.onGround ? legSwing*0.5 : 0), 11, 5);
-  ctx.fillRect(1, -3 + (p.onGround ? legSwing2*0.5 : 0), 11, 5);
-  // suela blanca
+  // zapatillas blancas con detalle azul
   ctx.fillStyle = '#fff';
-  ctx.fillRect(-12, -1 + (p.onGround ? legSwing*0.5 : 0), 11, 2);
-  ctx.fillRect(1, -1 + (p.onGround ? legSwing2*0.5 : 0), 11, 2);
+  ctx.fillRect(-12, -4 + (p.onGround ? legSwing*0.5 : 0), 12, 6);
+  ctx.fillRect(0, -4 + (p.onGround ? legSwing2*0.5 : 0), 12, 6);
+  // suela
+  ctx.fillStyle = '#2a3a5a';
+  ctx.fillRect(-12, -1 + (p.onGround ? legSwing*0.5 : 0), 12, 2);
+  ctx.fillRect(0, -1 + (p.onGround ? legSwing2*0.5 : 0), 12, 2);
+  // detalle lateral azul
+  ctx.fillStyle = '#4a90d9';
+  ctx.fillRect(-10, -3 + (p.onGround ? legSwing*0.5 : 0), 8, 2);
+  ctx.fillRect(2, -3 + (p.onGround ? legSwing2*0.5 : 0), 8, 2);
 
-  // === CUERPO: camiseta ===
-  ctx.fillStyle = '#e74c3c'; // camiseta roja
+  // === CUERPO: camiseta azul celeste ===
+  ctx.fillStyle = '#7ec5e8'; // azul celeste como la foto
   ctx.beginPath();
   ctx.roundRect(-14, bodyTop, 28, 18, 5);
   ctx.fill();
-  // banda decorativa
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(-14, bodyTop + 6, 28, 3);
+  // cuello redondo
+  ctx.fillStyle = '#6bb5d8';
+  ctx.beginPath();
+  ctx.ellipse(0, bodyTop, 6, 3, 0, 0, Math.PI*2);
+  ctx.fill();
+  // pequeña sombra del cuello
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.beginPath();
+  ctx.ellipse(0, bodyTop + 1, 5, 2, 0, 0, Math.PI*2);
+  ctx.fill();
 
   // === TIRACHINAS en la mano ===
   ctx.fillStyle = '#6b3410'; // madera
@@ -1518,57 +1529,121 @@ function drawPlayer(p) {
   // === BRAZOS ===
   const armSwing = p.onGround ? Math.sin(p.walkTime + Math.PI/2) * 4 : 0;
   // brazo trasero
-  ctx.fillStyle = '#e8b890';
+  ctx.fillStyle = '#f0c8a0';
   ctx.fillRect(-16, bodyTop+2, 7, 14);
   // brazo delantero (con tirachinas)
   ctx.save();
   ctx.translate(12, bodyTop+3);
   ctx.rotate(armSwing * 0.05);
-  ctx.fillStyle = '#e8b890';
+  ctx.fillStyle = '#f0c8a0';
   ctx.fillRect(-3, 0, 7, 14);
   ctx.restore();
 
-  // === CABEZA ===
-  // cara
-  ctx.fillStyle = '#e8b890';
+  // === CABEZA: cara ovalada ===
+  ctx.fillStyle = '#f0c8a0'; // piel clara
   ctx.beginPath();
-  ctx.ellipse(0, headY+2, 10, 11, 0, 0, Math.PI*2);
+  ctx.ellipse(0, headY+2, 10, 12, 0, 0, Math.PI*2);
   ctx.fill();
 
-  // pelo castaño
-  ctx.fillStyle = '#6b4226';
+  // === PELO: castaño claro con flequillo denso ===
+  // capa base del pelo (toda la cabeza)
+  ctx.fillStyle = '#c4a070';
   ctx.beginPath();
-  ctx.ellipse(0, headY-4, 12, 9, 0, Math.PI, Math.PI*2);
+  ctx.ellipse(0, headY-2, 13, 11, 0, Math.PI, Math.PI*2);
   ctx.fill();
-  // mechón
-  ctx.fillStyle = '#5a3520';
+  // laterales
   ctx.beginPath();
-  ctx.ellipse(-3, headY-10, 5, 4, -0.3, 0, Math.PI*2);
+  ctx.ellipse(-12, headY, 4, 9, -0.15, 0, Math.PI*2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(4, headY-11, 5, 4, 0.3, 0, Math.PI*2);
+  ctx.ellipse(12, headY, 4, 9, 0.15, 0, Math.PI*2);
   ctx.fill();
 
-  // ojos
+  // FLEQUILLO: mechones triangulares que caen sobre la frente
+  ctx.fillStyle = '#b89260';
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 5 - 3.5, headY - 5);
+    ctx.lineTo(i * 5 - 2.5, headY + 3);
+    ctx.lineTo(i * 5 + 2.5, headY + 3);
+    ctx.lineTo(i * 5 + 3.5, headY - 5);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // puntas del flequillo (más oscuras para dar contraste)
+  ctx.fillStyle = '#a07845';
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 5 - 2.5, headY + 1);
+    ctx.lineTo(i * 5, headY + 4);
+    ctx.lineTo(i * 5 + 2.5, headY + 1);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // volumen superior del pelo (más claro arriba)
+  ctx.fillStyle = '#d4b080';
+  ctx.beginPath();
+  ctx.ellipse(-4, headY - 7, 5, 3, -0.2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(4, headY - 7, 5, 3, 0.2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, headY - 8, 4, 2.5, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // === OREJAS visibles ===
+  ctx.fillStyle = '#f0c8a0';
+  ctx.beginPath(); ctx.ellipse(-10, headY+2, 2.5, 4, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(10, headY+2, 2.5, 4, 0.2, 0, Math.PI*2); ctx.fill();
+  // sombra interior orejas
+  ctx.fillStyle = 'rgba(200,160,130,0.5)';
+  ctx.beginPath(); ctx.ellipse(-10, headY+3, 1.2, 2, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(10, headY+3, 1.2, 2, 0.2, 0, Math.PI*2); ctx.fill();
+
+  // === OJOS avellana ===
   const blink = (Math.sin(p.blink * 1.3) > 0.97) ? 0.3 : 1;
   ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.ellipse(-4, headY, 3, 3*blink, 0, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(4, headY, 3, 3*blink, 0, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#2a1a0a';
-  ctx.beginPath(); ctx.arc(-4 + (p.facing>0?0.5:0), headY, 1.5, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(4 + (p.facing>0?0.5:0), headY, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-4, headY+1, 3.2, 3.2*blink, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(4, headY+1, 3.2, 3.2*blink, 0, 0, Math.PI*2); ctx.fill();
+  // iris avellana (marrón claro)
+  ctx.fillStyle = '#7a5a30';
+  ctx.beginPath(); ctx.arc(-4 + (p.facing>0?0.5:0), headY+1, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4 + (p.facing>0?0.5:0), headY+1, 2, 0, Math.PI*2); ctx.fill();
+  // pupila
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath(); ctx.arc(-4 + (p.facing>0?0.5:0), headY+1, 1.1, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4 + (p.facing>0?0.5:0), headY+1, 1.1, 0, Math.PI*2); ctx.fill();
+  // brillo en los ojos
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(-3.5 + (p.facing>0?0.5:0), headY+0.3, 0.7, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4.5 + (p.facing>0?0.5:0), headY+0.3, 0.7, 0, Math.PI*2); ctx.fill();
 
-  // sonrisa
-  ctx.strokeStyle = '#8b4513';
-  ctx.lineWidth = 1.5;
+  // === CEJAS castaño claro ===
+  ctx.strokeStyle = '#8b6838';
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
-  ctx.arc(0, headY+4, 3.5, 0.2, Math.PI - 0.2);
+  ctx.moveTo(-7, headY-2); ctx.lineTo(-2, headY-2.5);
+  ctx.moveTo(7, headY-2); ctx.lineTo(2, headY-2.5);
   ctx.stroke();
 
-  // mejillas rosadas
-  ctx.fillStyle = 'rgba(255, 150, 150, 0.4)';
-  ctx.beginPath(); ctx.arc(-7, headY+3, 2.5, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(7, headY+3, 2.5, 0, Math.PI*2); ctx.fill();
+  // === NARIZ pequeña (botón) ===
+  ctx.fillStyle = 'rgba(200,160,130,0.5)';
+  ctx.beginPath();
+  ctx.arc(0, headY+4, 1.5, 0, Math.PI*2);
+  ctx.fill();
+
+  // === BOCA: sonrisa sutil y amable ===
+  ctx.strokeStyle = '#8b5a2b';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, headY+5, 3.5, 0.15, Math.PI - 0.15);
+  ctx.stroke();
+
+  // === MEJILLAS rosadas ===
+  ctx.fillStyle = 'rgba(255, 160, 150, 0.3)';
+  ctx.beginPath(); ctx.arc(-7, headY+4, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(7, headY+4, 2.5, 0, Math.PI*2); ctx.fill();
 
   ctx.restore();
 }
