@@ -130,6 +130,18 @@ const sfx = {
     noise(0.1, 0.25, 2200, 'highpass');
   },
 
+  bossAlert() {
+    // alerta de boss: tono grave y dramático
+    slide(150, 80, 0.6, 'sawtooth', 0.3);
+    setTimeout(() => slide(200, 60, 0.4, 'square', 0.25), 200);
+  },
+
+  bossShoot() {
+    // disparo del boss: plasma alien
+    slide(800, 200, 0.12, 'sawtooth', 0.22);
+    noise(0.05, 0.15, 500, 'bandpass');
+  },
+
   land() {
     slide(200, 120, 0.07, 'sine', 0.18);
   },

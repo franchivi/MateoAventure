@@ -104,6 +104,9 @@ let currentLevel = 0;
 let totalElapsed = 0;
 let levelStartTime = 0;
 let shootCooldown = 0;
+let boss = null;
+let bossProjectiles = [];
+let bossDefeated = false;
 
 let record = parseFloat(localStorage.getItem('mateoaventura_record')) || Infinity;
 
@@ -266,6 +269,15 @@ const LEVELS = [
       { x: 4100, patrolMin: 3860, patrolMax: 4560, speed: 190, hp: 3 },
     ],
     goal: { x: 4480, y: 400, w: 60, h: 80 },
+    boss: {
+      x: 4300, y: 300, w: 90, h: 100,
+      hp: 10, maxHp: 10,
+      vx: 80, vy: 0,
+      shootTimer: 1.5,
+      phase: 0, // 0=espera, 1=combate, 2=derrotado
+      anim: 0,
+      hitFlash: 0,
+    },
   },
 ];
 
@@ -273,7 +285,7 @@ const LEVELS = [
 function buildLevel(index) {
   const def = LEVELS[index];
   const items = def.animals.map(([x, y], i) => ({
-    x, y, w: 26, h: 30, collected: false, t: Math.random() * Math.PI * 2,
+    x, y, w: 32, h: 32, collected: false, t: Math.random() * Math.PI * 2,
     type: i % 4, // 4 tipos de animal diferentes
   }));
   return {
@@ -285,6 +297,7 @@ function buildLevel(index) {
     deathY: 700,
     theme: def.theme,
     name: def.name,
+    boss: def.boss ? { ...def.boss } : null,
   };
 }
 
@@ -520,6 +533,104 @@ function update() {
     }
   }
 
+  // ---- Boss final ----
+  if (boss && !bossDefeated) {
+    boss.anim += dt;
+    if (boss.hitFlash > 0) boss.hitFlash -= dt;
+
+    // Activar boss cuando el jugador se acerca
+    if (boss.phase === 0 && player.x > boss.x - 400) {
+      boss.phase = 1;
+      goalMsg = '⚠️ ¡BOSS FINAL! ¡Derrota al Rey Alien! 👽👑';
+      goalMsgTimer = 3;
+      if (window.JMSound) JMSound.sfx.bossAlert();
+    }
+
+    if (boss.phase === 1) {
+      // Movimiento: flotar arriba y abajo + perseguir al jugador horizontal
+      boss.y += Math.sin(boss.anim * 1.5) * 60 * dt;
+      boss.y = Math.max(180, Math.min(380, boss.y));
+
+      // Moverse hacia el jugador lentamente
+      const dx = player.x - boss.x;
+      if (Math.abs(dx) > 150) {
+        boss.x += Math.sign(dx) * 50 * dt;
+      }
+
+      // Disparar proyectiles alien
+      boss.shootTimer -= dt;
+      if (boss.shootTimer <= 0) {
+        const bx = boss.x + boss.w/2;
+        const by = boss.y + boss.h/2;
+        const targetX = player.x + player.w/2;
+        const targetY = player.y + player.h/2;
+        const dist = Math.hypot(targetX - bx, targetY - by);
+        const speed = 350;
+        bossProjectiles.push({
+          x: bx, y: by, w: 14, h: 14,
+          vx: (targetX - bx) / dist * speed,
+          vy: (targetY - by) / dist * speed,
+          life: 3, active: true,
+        });
+        if (window.JMSound) JMSound.sfx.bossShoot();
+        // Más rápido conforme pierde HP
+        boss.shootTimer = Math.max(0.6, 1.8 - (1 - boss.hp / boss.maxHp) * 1.2);
+      }
+
+      // Colisión: proyectiles del boss con jugador
+      for (const bp of bossProjectiles) {
+        if (!bp.active) continue;
+        bp.x += bp.vx * dt;
+        bp.y += bp.vy * dt;
+        bp.life -= dt;
+        if (bp.life <= 0 || bp.x < 0 || bp.x > level.worldW || bp.y > 600 || bp.y < 0) {
+          bp.active = false;
+          continue;
+        }
+        if (rectsOverlap(player, bp) && player.invuln <= 0) {
+          bp.active = false;
+          hurtPlayer(false);
+        }
+      }
+      bossProjectiles = bossProjectiles.filter(p => p.active);
+
+      // Colisión: proyectiles del jugador (piedras) con el boss
+      for (const pr of projectiles) {
+        if (!pr.active) continue;
+        if (rectsOverlap(pr, boss)) {
+          pr.active = false;
+          boss.hp -= PROJECTILE_DMG;
+          boss.hitFlash = 0.15;
+          spawnSparkle(pr.x + pr.w/2, pr.y + pr.h/2);
+          if (window.JMSound) JMSound.sfx.hit();
+          if (boss.hp <= 0) {
+            boss.phase = 2;
+            bossDefeated = true;
+            // Explosión grande
+            for (let i = 0; i < 30; i++) {
+              const a = Math.random() * Math.PI * 2;
+              const s = 100 + Math.random() * 200;
+              particles.push({
+                x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+                vx: Math.cos(a)*s, vy: Math.sin(a)*s - 80,
+                life: 0.8, max: 0.8, size: 4+Math.random()*8,
+                color: i % 2 === 0 ? '#a020f0' : '#7fffd4', type:'poof'
+              });
+            }
+            if (window.JMSound) { JMSound.sfx.stomp(); JMSound.sfx.victory(); }
+            goalMsg = '¡BOSS DERROTADO! ¡Has salvado Las Jaras! 🎉🐾';
+            goalMsgTimer = 4;
+          }
+        }
+      }
+
+      // Colisión física con el boss (daño al tocarlo)
+      if (rectsOverlap(player, boss) && player.invuln <= 0) {
+        hurtPlayer(false);
+      }
+    }
+  }
+
   // ---- Meta ----
   goalAnim += dt;
   if (rectsOverlap(player, level.goal)) {
@@ -659,6 +770,9 @@ function draw() {
   for (const it of items) if (!it.collected) drawAnimal(it);
   for (const e of enemies) if (e.alive) drawAlien(e);
   for (const pr of projectiles) drawProjectile(pr);
+  // Boss final
+  if (boss && boss.phase < 2) drawBoss(boss);
+  for (const bp of bossProjectiles) if (bp.active) drawBossProjectile(bp);
   drawPlayer(player);
   for (const p of particles) drawParticle(p);
 
@@ -860,9 +974,7 @@ function drawPlatform(pl) {
   }
 }
 
-/* ---- Animal perdido (coleccionable) ---- */
-const ANIMAL_EMOJIS = ['🐰', '🦔', '🐢', '🦜'];
-
+/* ---- Animal perdido (coleccionable) — dibujado en canvas ---- */
 function drawAnimal(it) {
   const cx = it.x + it.w/2;
   const cy = it.y + it.h/2 + Math.sin(it.t)*4;
@@ -871,24 +983,155 @@ function drawAnimal(it) {
 
   // aura de "perdido" pulsante
   const pulse = 0.5 + Math.sin(it.t * 2) * 0.3;
-  ctx.fillStyle = `rgba(127, 255, 212, ${pulse * 0.3})`;
+  ctx.fillStyle = `rgba(127, 255, 212, ${pulse * 0.35})`;
   ctx.beginPath();
-  ctx.arc(0, 0, 18, 0, Math.PI*2);
+  ctx.arc(0, 0, 22, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = `rgba(127, 255, 212, ${pulse * 0.15})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, 30, 0, Math.PI*2);
   ctx.fill();
 
-  // dibujar el animal según su tipo
   const aType = it.type % 4;
-  ctx.font = '20px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(ANIMAL_EMOJIS[aType], 0, 0);
+
+  if (aType === 0) drawBunny();
+  else if (aType === 1) drawHedgehog();
+  else if (aType === 2) drawTurtle();
+  else drawBird();
 
   // signo de exclamación "perdido"
   ctx.fillStyle = '#ff6b1a';
-  ctx.font = 'bold 10px "Baloo 2"';
-  ctx.fillText('!', 14, -14);
+  ctx.font = 'bold 12px "Baloo 2"';
+  ctx.textAlign = 'center';
+  ctx.fillText('!', 16, -16);
 
   ctx.restore();
+}
+
+/* --- Conejo --- */
+function drawBunny() {
+  // cuerpo
+  ctx.fillStyle = '#f5f0e8';
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 10, 9, 0, 0, Math.PI*2);
+  ctx.fill();
+  // orejas
+  ctx.fillStyle = '#f5f0e8';
+  ctx.beginPath(); ctx.ellipse(-5, -10, 3, 8, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(5, -10, 3, 8, 0.2, 0, Math.PI*2); ctx.fill();
+  // interior orejas rosado
+  ctx.fillStyle = '#ffb3c1';
+  ctx.beginPath(); ctx.ellipse(-5, -10, 1.5, 5, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(5, -10, 1.5, 5, 0.2, 0, Math.PI*2); ctx.fill();
+  // ojos
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath(); ctx.arc(-3, 0, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(3, 0, 1.5, 0, Math.PI*2); ctx.fill();
+  // nariz
+  ctx.fillStyle = '#ff6b9d';
+  ctx.beginPath(); ctx.arc(0, 4, 1.2, 0, Math.PI*2); ctx.fill();
+  // bigotes
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-3, 5); ctx.lineTo(-8, 4);
+  ctx.moveTo(-3, 6); ctx.lineTo(-8, 7);
+  ctx.moveTo(3, 5); ctx.lineTo(8, 4);
+  ctx.moveTo(3, 6); ctx.lineTo(8, 7);
+  ctx.stroke();
+}
+
+/* --- Erizo --- */
+function drawHedgehog() {
+  // cuerpo marrón
+  ctx.fillStyle = '#8b6b3a';
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 11, 8, 0, 0, Math.PI*2);
+  ctx.fill();
+  // púas
+  ctx.strokeStyle = '#6b4b2a';
+  ctx.lineWidth = 1.5;
+  for (let i = -3; i <= 3; i++) {
+    const ang = -Math.PI/2 + i * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ang)*8, Math.sin(ang)*6 + 2);
+    ctx.lineTo(Math.cos(ang)*14, Math.sin(ang)*12 + 2);
+    ctx.stroke();
+  }
+  // cara clara
+  ctx.fillStyle = '#e8d5b8';
+  ctx.beginPath();
+  ctx.ellipse(0, 6, 6, 5, 0, 0, Math.PI*2);
+  ctx.fill();
+  // ojos
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath(); ctx.arc(-2.5, 5, 1.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(2.5, 5, 1.3, 0, Math.PI*2); ctx.fill();
+  // nariz
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath(); ctx.arc(0, 8, 1, 0, Math.PI*2); ctx.fill();
+}
+
+/* --- Tortuga --- */
+function drawTurtle() {
+  // caparazón
+  ctx.fillStyle = '#3a8a3a';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 12, 9, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#2a6a2a';
+  // patrón del caparazón
+  ctx.beginPath(); ctx.arc(-4, -1, 3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, -1, 3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 3, 3, 0, Math.PI*2); ctx.fill();
+  // cabeza
+  ctx.fillStyle = '#5a9a4a';
+  ctx.beginPath();
+  ctx.ellipse(0, 9, 5, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+  // ojos
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath(); ctx.arc(-2, 8, 1, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(2, 8, 1, 0, Math.PI*2); ctx.fill();
+  // patas
+  ctx.fillStyle = '#5a9a4a';
+  ctx.beginPath(); ctx.ellipse(-9, 4, 3, 2, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(9, 4, 3, 2, 0, 0, Math.PI*2); ctx.fill();
+}
+
+/* --- Pájaro --- */
+function drawBird() {
+  // cuerpo azul
+  ctx.fillStyle = '#4fc3f7';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 9, 8, 0, 0, Math.PI*2);
+  ctx.fill();
+  // ala
+  ctx.fillStyle = '#29b6f6';
+  ctx.beginPath();
+  ctx.ellipse(-2, 2, 5, 4, -0.3, 0, Math.PI*2);
+  ctx.fill();
+  // cabeza
+  ctx.fillStyle = '#4fc3f7';
+  ctx.beginPath();
+  ctx.arc(5, -4, 5, 0, Math.PI*2);
+  ctx.fill();
+  // pico naranja
+  ctx.fillStyle = '#ff9800';
+  ctx.beginPath();
+  ctx.moveTo(9, -4); ctx.lineTo(14, -3); ctx.lineTo(9, -2);
+  ctx.closePath();
+  ctx.fill();
+  // ojo
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath(); ctx.arc(6, -5, 1.3, 0, Math.PI*2); ctx.fill();
+  // patitas
+  ctx.strokeStyle = '#ff9800';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-3, 7); ctx.lineTo(-3, 11);
+  ctx.moveTo(3, 7); ctx.lineTo(3, 11);
+  ctx.stroke();
 }
 
 /* ---- Alien secuestrador (enemigo) ---- */
@@ -980,6 +1223,150 @@ function drawAlien(e) {
 }
 
 /* ---- Proyectil (piedra de tirachinas) ---- */
+/* ---- Boss final: Rey Alien ---- */
+function drawBoss(b) {
+  const cx = b.x + b.w/2;
+  const cy = b.y + b.h/2;
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  if (b.hitFlash > 0) ctx.filter = 'brightness(2.5)';
+
+  const bob = Math.sin(b.anim * 1.5) * 3;
+  ctx.translate(0, bob);
+
+  // aura siniestra
+  const auraPulse = 0.3 + Math.sin(b.anim * 3) * 0.2;
+  ctx.fillStyle = `rgba(160, 32, 240, ${auraPulse * 0.2})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, 70, 0, Math.PI*2);
+  ctx.fill();
+
+  // cuerpo gigante (cabeza)
+  ctx.fillStyle = '#4a8a4a';
+  ctx.beginPath();
+  ctx.ellipse(0, -10, 42, 38, 0, 0, Math.PI*2);
+  ctx.fill();
+  // parte superior más oscura
+  ctx.fillStyle = '#3a6a3a';
+  ctx.beginPath();
+  ctx.ellipse(0, -25, 38, 22, 0, Math.PI, Math.PI*2);
+  ctx.fill();
+
+  // corona alien
+  ctx.fillStyle = '#ffd700';
+  ctx.strokeStyle = '#b8860b';
+  ctx.lineWidth = 2;
+  for (let i = -2; i <= 2; i++) {
+    const px = i * 16;
+    const py = -42 - Math.abs(i) * 3;
+    ctx.beginPath();
+    ctx.moveTo(px - 7, -35);
+    ctx.lineTo(px, py);
+    ctx.lineTo(px + 7, -35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // antenas grandes con ojos
+  ctx.strokeStyle = '#4a8a4a';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(-20, -38);
+  ctx.lineTo(-28, -55);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(20, -38);
+  ctx.lineTo(28, -55);
+  ctx.stroke();
+  // ojos en antenas (rojos brillantes)
+  ctx.fillStyle = '#ff1a1a';
+  ctx.beginPath(); ctx.arc(-28, -57, 6, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(28, -57, 6, 0, Math.PI*2); ctx.fill();
+  // brillo
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(-30, -59, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(26, -59, 2, 0, Math.PI*2); ctx.fill();
+
+  // ojos gigantes de la cara
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(-14, -12, 11, 16, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, -12, 11, 16, 0.2, 0, Math.PI*2); ctx.fill();
+  // pupilas verticales
+  ctx.fillStyle = '#000';
+  const eyeLookX = (player.x > cx) ? 2 : -2;
+  ctx.beginPath(); ctx.ellipse(-14 + eyeLookX, -10, 3, 9, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14 + eyeLookX, -10, 3, 9, 0, 0, Math.PI*2); ctx.fill();
+
+  // boca grande con dientes
+  ctx.fillStyle = '#1a3a1a';
+  ctx.beginPath();
+  ctx.ellipse(0, 8, 18, 10, 0, 0, Math.PI*2);
+  ctx.fill();
+  // dientes
+  ctx.fillStyle = '#fff';
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i*7 - 3, 0);
+    ctx.lineTo(i*7, 8);
+    ctx.lineTo(i*7 + 3, 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // tentáculos grandes
+  ctx.fillStyle = '#4a8a4a';
+  for (let i = -3; i <= 3; i++) {
+    const wave = Math.sin(b.anim * 2 + i * 0.4) * 8;
+    ctx.beginPath();
+    ctx.ellipse(i * 12, 28 + wave, 6, 18, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.filter = 'none';
+
+  // barra de HP del boss
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(-50, -70, 100, 8);
+  const hpRatio = b.hp / b.maxHp;
+  const hpColor = hpRatio > 0.5 ? '#3f3' : hpRatio > 0.25 ? '#ff3' : '#f33';
+  ctx.fillStyle = hpColor;
+  ctx.fillRect(-48, -68, hpRatio * 96, 4);
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-50, -70, 100, 8);
+
+  // etiqueta
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 8px "Baloo 2"';
+  ctx.textAlign = 'center';
+  ctx.fillText('REY ALIEN', 0, -74);
+
+  ctx.restore();
+}
+
+/* ---- Proyectil del boss (bola de plasma alien) ---- */
+function drawBossProjectile(bp) {
+  ctx.save();
+  ctx.translate(bp.x + bp.w/2, bp.y + bp.h/2);
+  // estela
+  ctx.fillStyle = 'rgba(160, 32, 240, 0.4)';
+  ctx.beginPath();
+  ctx.arc(-bp.vx * 0.015, -bp.vy * 0.015, 8, 0, Math.PI*2);
+  ctx.fill();
+  // núcleo
+  ctx.fillStyle = '#a020f0';
+  ctx.beginPath();
+  ctx.arc(0, 0, 6, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(-1, -1, 2.5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawProjectile(pr) {
   ctx.save();
   ctx.translate(pr.x + pr.w/2, pr.y + pr.h/2);
@@ -1250,6 +1637,9 @@ function loadLevel(idx) {
   items = level.items;
   projectiles = [];
   particles = [];
+  bossProjectiles = [];
+  boss = level.boss ? { ...level.boss, maxHp: level.boss.hp } : null;
+  bossDefeated = false;
   camera = { x: 0, y: 0 };
   animalsCollected = 0;
   elapsed = 0;
